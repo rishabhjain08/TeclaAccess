@@ -1404,14 +1404,14 @@ public class TeclaIME extends InputMethodService
 					TeclaApp.getInstance().byte2Hex(switchEvent.getSwitchChanges()) + ":" +
 					TeclaApp.getInstance().byte2Hex(switchEvent.getSwitchStates()));
 
-			if (switchEvent.isPressed(SwitchEvent.SWITCH_J4) || switchEvent.isPressed(SwitchEvent.SWITCH_E1)) {
+			if (switchEvent.isPressed(SwitchEvent.SWITCH_J1) || switchEvent.isPressed(SwitchEvent.SWITCH_E1)) {
 				if (TeclaApp.persistence.isInverseScanningEnabled()) {
 					TeclaApp.highlighter.resumeSelfScanning();
 				} else {
 					selectHighlighted(true);
 				}
 			}
-			if (switchEvent.isReleased(SwitchEvent.SWITCH_J4) || switchEvent.isReleased(SwitchEvent.SWITCH_E1)) {
+			if (switchEvent.isReleased(SwitchEvent.SWITCH_J1) || switchEvent.isReleased(SwitchEvent.SWITCH_E1)) {
 				if (TeclaApp.persistence.isInverseScanningEnabled()) {
 					if (TeclaApp.persistence.isInverseScanningChanged()) {
 						//Ignore event right after Inverse Scanning is Enabled
@@ -1425,13 +1425,13 @@ public class TeclaIME extends InputMethodService
 					stopRepeatingKey();
 				}
 			}
-			if (switchEvent.isPressed(SwitchEvent.SWITCH_J3) || switchEvent.isPressed(SwitchEvent.SWITCH_E2)) {
+			if (switchEvent.isPressed(SwitchEvent.SWITCH_J2) || switchEvent.isPressed(SwitchEvent.SWITCH_E2)) {
 				TeclaApp.highlighter.stepOut();
 			}
-			if (switchEvent.isPressed(SwitchEvent.SWITCH_J2)) {
+			if (switchEvent.isPressed(SwitchEvent.SWITCH_J3)) {
 				TeclaApp.highlighter.move(Highlighter.HIGHLIGHT_PREV);
 			}
-			if (switchEvent.isPressed(SwitchEvent.SWITCH_J1)) {
+			if (switchEvent.isPressed(SwitchEvent.SWITCH_J4)) {
 				TeclaApp.highlighter.move(Highlighter.HIGHLIGHT_NEXT);
 			}
 			
