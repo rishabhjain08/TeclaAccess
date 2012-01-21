@@ -35,7 +35,6 @@ import android.content.IntentFilter;
 import android.content.SharedPreferences;
 import android.os.Bundle;
 import android.preference.CheckBoxPreference;
-import android.preference.ListPreference;
 import android.preference.Preference;
 import android.preference.PreferenceActivity;
 import android.preference.PreferenceGroup;
@@ -56,8 +55,9 @@ implements SharedPreferences.OnSharedPreferenceChangeListener {
 
 	private CheckBoxPreference mQuickFixes;
 	private CheckBoxPreference mShowSuggestions;
-
 	private CheckBoxPreference mPrefVoiceInput;
+	private CheckBoxPreference mPrefVariantsKey;
+
 	private CheckBoxPreference mPrefPersistentKeyboard;
 	private Preference mPrefAutohideTimeout;
 	private CheckBoxPreference mPrefConnectToShield;
@@ -88,6 +88,7 @@ implements SharedPreferences.OnSharedPreferenceChangeListener {
 		mQuickFixes = (CheckBoxPreference) findPreference(QUICK_FIXES_KEY);
 		mShowSuggestions = (CheckBoxPreference) findPreference(SHOW_SUGGESTIONS_KEY);
 		mPrefVoiceInput = (CheckBoxPreference) findPreference(Persistence.PREF_VOICE_INPUT);
+		mPrefVariantsKey = (CheckBoxPreference) findPreference(Persistence.PREF_VARIANTS_KEY);
 		mPrefPersistentKeyboard = (CheckBoxPreference) findPreference(Persistence.PREF_PERSISTENT_KEYBOARD);
 		mPrefAutohideTimeout = (Preference) findPreference(Persistence.PREF_AUTOHIDE_TIMEOUT);
 		mAutohideTimeoutDialog = new NavKbdTimeoutDialog(this);
@@ -162,6 +163,12 @@ implements SharedPreferences.OnSharedPreferenceChangeListener {
 	}
 
 	@Override
+	protected void onPause() {
+		super.onPause();
+		finish();
+	}
+
+	@Override
 	protected void onDestroy() {
 		super.onDestroy();
 		unregisterReceiver(mReceiver);
@@ -185,9 +192,9 @@ implements SharedPreferences.OnSharedPreferenceChangeListener {
 
 			if (intent.getAction().equals(BluetoothDevice.ACTION_FOUND) && !mShieldFound) {
 				BluetoothDevice dev = intent.getExtras().getParcelable(BluetoothDevice.EXTRA_DEVICE);
-				if ((dev.getName() != null) &&
-						(dev.getName().startsWith(SwitchEventProvider.PREFIX_SHIELD_V1) ||
-						dev.getName().startsWith(SwitchEventProvider.PREFIX_SHIELD))) {
+				if ((dev.getName() != null) && (
+						dev.getName().startsWith(SwitchEventProvider.SHIELD_PREFIX_2) ||
+						dev.getName().startsWith(SwitchEventProvider.SHIELD_PREFIX_3) )) {
 					if (TeclaApp.DEBUG) Log.d(TeclaApp.TAG, CLASS_TAG + "Found a Tecla Access Shield candidate");
 					mShieldFound = true;
 					mShieldAddress = dev.getAddress(); 
@@ -229,7 +236,6 @@ implements SharedPreferences.OnSharedPreferenceChangeListener {
 			if (intent.getAction().equals(SwitchEventProvider.ACTION_SHIELD_DISCONNECTED)) {
 				if (TeclaApp.DEBUG) Log.d(TeclaApp.TAG, CLASS_TAG + "SEP broadcast stopped");
 				closeDialog();
-				TeclaApp.getInstance().showToast(R.string.shield_disconnected);
 			}
 		}
 	};
@@ -248,31 +254,35 @@ implements SharedPreferences.OnSharedPreferenceChangeListener {
 
 	public void onSharedPreferenceChanged(SharedPreferences sharedPreferences,
 			String key) {
-		if (key.equals(Persistence.PREF_VOICE_INPUT)) {
-			if (mPrefPersistentKeyboard.isChecked()) {
-				//Reset IME
-				TeclaApp.getInstance().hideSoftIME();
-				TeclaApp.getInstance().requestSoftIME();
+		if (key.equals(Persistence.PREF_VOICE_INPUT) || key.equals(Persistence.PREF_VARIANTS_KEY)) {
+			if (mPrefPersistentKeyboard.isChecked() || mPrefVariantsKey.isChecked()) {
+				if (mPrefPersistentKeyboard.isChecked()) {
+					//Reset IME
+					TeclaApp.getInstance().requestHideIMEView();
+					TeclaApp.getInstance().requestShowIMEView();
+				}
 			}
 		}
 		if (key.equals(Persistence.PREF_PERSISTENT_KEYBOARD)) {
 			if (mPrefPersistentKeyboard.isChecked()) {
-				// Show keyboard immediately if Tecla Access IME is selected
-				TeclaApp.getInstance().requestSoftIME();
+				mPrefAutohideTimeout.setEnabled(true);
+				// Show keyboard immediately
+				TeclaApp.getInstance().requestShowIMEView();
 			} else {
+				mPrefAutohideTimeout.setEnabled(false);
 				mPrefSelfScanning.setChecked(false);
 				mPrefSelfScanning.setEnabled(false);
 				mPrefInverseScanning.setChecked(false);
 				mPrefInverseScanning.setEnabled(false);
 				mPrefFullScreenSwitch.setChecked(false);
 				mPrefConnectToShield.setChecked(false);
-				TeclaApp.getInstance().hideSoftIME();
+				TeclaApp.getInstance().requestHideIMEView();
 			}
 		}
 		if (key.equals(Persistence.PREF_AUTOHIDE_TIMEOUT)) {
 			if (mPrefPersistentKeyboard.isChecked()) {
 				// Show keyboard immediately if Tecla Access IME is selected
-				TeclaApp.getInstance().requestSoftIME();
+				TeclaApp.getInstance().requestShowIMEView();
 			} else {
 				mPrefSelfScanning.setChecked(false);
 				mPrefSelfScanning.setEnabled(false);
@@ -280,7 +290,7 @@ implements SharedPreferences.OnSharedPreferenceChangeListener {
 				mPrefInverseScanning.setEnabled(false);
 				mPrefFullScreenSwitch.setChecked(false);
 				mPrefConnectToShield.setChecked(false);
-				TeclaApp.getInstance().hideSoftIME();
+				TeclaApp.getInstance().requestHideIMEView();
 			}
 		}
 		if (key.equals(Persistence.PREF_CONNECT_TO_SHIELD)) {
@@ -288,7 +298,7 @@ implements SharedPreferences.OnSharedPreferenceChangeListener {
 				// Connect to shield but also keep connection alive
 				discoverShield();
 			} else {
-				// TODO: Tecla Access - Find out how to disconnect
+				// FIXME: Tecla Access - Find out how to disconnect
 				// switch event provider without breaking
 				// connection with other potential clients.
 				// Should perhaps use Binding?
@@ -299,7 +309,7 @@ implements SharedPreferences.OnSharedPreferenceChangeListener {
 					mPrefInverseScanning.setChecked(false);
 					mPrefInverseScanning.setEnabled(false);
 				}
-				SepManager.stop(this);
+				SepManager.stop(getApplicationContext());
 			}
 		}
 		if (key.equals(Persistence.PREF_FULLSCREEN_SWITCH)) {
@@ -311,12 +321,17 @@ implements SharedPreferences.OnSharedPreferenceChangeListener {
 				if (!(mPrefSelfScanning.isChecked() || mPrefInverseScanning.isChecked())) {
 					mPrefSelfScanning.setChecked(true);
 				}
+				mPrefAutohideTimeout.setEnabled(false);
+				TeclaApp.persistence.setNeverHideNavigationKeyboard();
 			} else {
 				if (!mPrefConnectToShield.isChecked()) {
 					mPrefSelfScanning.setChecked(false);
 					mPrefSelfScanning.setEnabled(false);
 					mPrefInverseScanning.setChecked(false);
 					mPrefInverseScanning.setEnabled(false);
+				}
+				if (mPrefPersistentKeyboard.isChecked()) {
+					mPrefAutohideTimeout.setEnabled(true);
 				}
 				TeclaApp.getInstance().stopFullScreenSwitchMode();
 			}

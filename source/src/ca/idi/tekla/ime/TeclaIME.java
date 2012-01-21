@@ -27,6 +27,7 @@ import android.content.res.Configuration;
 import android.inputmethodservice.InputMethodService;
 import android.inputmethodservice.Keyboard;
 import android.inputmethodservice.KeyboardView;
+import android.inputmethodservice.Keyboard.Key;
 import android.media.AudioManager;
 import android.os.Debug;
 import android.os.Handler;
@@ -248,13 +249,13 @@ public class TeclaIME extends InputMethodService
 	@Override
 	public View onCreateInputView() {
 		mIMEView = (TeclaKeyboardView) getLayoutInflater().inflate(
-				R.layout.input, null);
+				R.xml.input, null);
 		mKeyboardSwitcher.setInputView(mIMEView);
 		mKeyboardSwitcher.makeKeyboards(true);
 		mIMEView.setOnKeyboardActionListener(this);
 		mKeyboardSwitcher.setKeyboardMode(KeyboardSwitcher.MODE_NAV, 0);
 		if (TeclaApp.DEBUG) Log.d(TeclaApp.TAG, CLASS_TAG + "Soft IME view created.");
-		TeclaApp.highlighter.setView(mIMEView);
+		TeclaApp.highlighter.setIMEView(mIMEView);
 		return mIMEView;
 	}
 
@@ -292,16 +293,13 @@ public class TeclaIME extends InputMethodService
 		switch (attribute.inputType&EditorInfo.TYPE_MASK_CLASS) {
 		case EditorInfo.TYPE_CLASS_NUMBER:
 		case EditorInfo.TYPE_CLASS_DATETIME:
-			mKeyboardSwitcher.setKeyboardMode(KeyboardSwitcher.MODE_SYMBOLS,
-					attribute.imeOptions);
+			mKeyboardSwitcher.setKeyboardMode(KeyboardSwitcher.MODE_SYMBOLS, attribute.imeOptions);
 			break;
 		case EditorInfo.TYPE_CLASS_PHONE:
-			mKeyboardSwitcher.setKeyboardMode(KeyboardSwitcher.MODE_PHONE,
-					attribute.imeOptions);
+			mKeyboardSwitcher.setKeyboardMode(KeyboardSwitcher.MODE_PHONE, attribute.imeOptions);
 			break;
 		case EditorInfo.TYPE_CLASS_TEXT:
-			mKeyboardSwitcher.setKeyboardMode(KeyboardSwitcher.MODE_TEXT,
-					attribute.imeOptions);
+			mKeyboardSwitcher.setKeyboardMode(KeyboardSwitcher.MODE_TEXT, attribute.imeOptions);
 			//startPrediction();
 			mPredictionOn = true;
 			// Make sure that passwords are not displayed in candidate view
@@ -318,15 +316,12 @@ public class TeclaIME extends InputMethodService
 			}
 			if (variation == EditorInfo.TYPE_TEXT_VARIATION_EMAIL_ADDRESS) {
 				mPredictionOn = false;
-				mKeyboardSwitcher.setKeyboardMode(KeyboardSwitcher.MODE_EMAIL,
-						attribute.imeOptions);
+				mKeyboardSwitcher.setKeyboardMode(KeyboardSwitcher.MODE_EMAIL, attribute.imeOptions);
 			} else if (variation == EditorInfo.TYPE_TEXT_VARIATION_URI) {
 				mPredictionOn = false;
-				mKeyboardSwitcher.setKeyboardMode(KeyboardSwitcher.MODE_URL,
-						attribute.imeOptions);
+				mKeyboardSwitcher.setKeyboardMode(KeyboardSwitcher.MODE_URL, attribute.imeOptions);
 			} else if (variation == EditorInfo.TYPE_TEXT_VARIATION_SHORT_MESSAGE) {
-				mKeyboardSwitcher.setKeyboardMode(KeyboardSwitcher.MODE_IM,
-						attribute.imeOptions);
+				mKeyboardSwitcher.setKeyboardMode(KeyboardSwitcher.MODE_IM, attribute.imeOptions);
 			} else if (variation == EditorInfo.TYPE_TEXT_VARIATION_FILTER) {
 				mPredictionOn = false;
 			} else if (variation == EditorInfo.TYPE_TEXT_VARIATION_WEB_EDIT_TEXT) {
@@ -354,13 +349,11 @@ public class TeclaIME extends InputMethodService
 			updateShiftKeyState(attribute);
 			break;
 		case EditorInfo.TYPE_NULL:
-			mKeyboardSwitcher.setKeyboardMode(KeyboardSwitcher.MODE_NAV,
-					attribute.imeOptions);
+			mKeyboardSwitcher.setKeyboardMode(KeyboardSwitcher.MODE_NAV, attribute.imeOptions);
 			updateShiftKeyState(attribute);
 			break;
 		default:
-			mKeyboardSwitcher.setKeyboardMode(KeyboardSwitcher.MODE_TEXT,
-					attribute.imeOptions);
+			mKeyboardSwitcher.setKeyboardMode(KeyboardSwitcher.MODE_TEXT, attribute.imeOptions);
 			updateShiftKeyState(attribute);
 		}
 		mIMEView.closing();
@@ -559,8 +552,8 @@ public class TeclaIME extends InputMethodService
 	@Override
 	public void onWindowHidden() {
 		super.onWindowHidden();
-		if (shouldShowIME() && !isNavKbdTimedOut) {
-			showSoftIME();
+		if (shouldShowIME() && !mIsNavKbdTimedOut) {
+			showIMEView();
 			if (TeclaApp.highlighter.isSoftIMEShowing()) {
 				mKeyboardSwitcher.setKeyboardMode(KeyboardSwitcher.MODE_NAV, 0);
 				evaluateStartScanning();
@@ -589,7 +582,7 @@ public class TeclaIME extends InputMethodService
 			if (action.equals(SwitchEventProvider.ACTION_SHIELD_CONNECTED)) {
 				if (TeclaApp.DEBUG) Log.d(TeclaApp.TAG, CLASS_TAG + "Received Shield connected intent.");
 				if (!mShieldConnected) mShieldConnected = true;
-				showSoftIME();
+				showIMEView();
 				evaluateStartScanning();
 			}
 			if (action.equals(SwitchEventProvider.ACTION_SHIELD_DISCONNECTED)) {
@@ -599,7 +592,7 @@ public class TeclaIME extends InputMethodService
 			}
 			if (action.equals(TeclaApp.ACTION_SHOW_IME)) {
 				if (TeclaApp.DEBUG) Log.d(TeclaApp.TAG, CLASS_TAG + "Received show IME intent.");
-				showSoftIME();
+				showIMEView();
 				evaluateStartScanning();
 				evaluateNavKbdTimeout();
 				//TODO: Assume/force persistent keyboard preference
@@ -712,6 +705,9 @@ public class TeclaIME extends InputMethodService
 	// Implementation of KeyboardViewListener
 	public void onKey(int primaryCode, int[] keyCodes) {
 		long when = SystemClock.uptimeMillis();
+
+		if (TeclaApp.DEBUG) Log.d(TeclaApp.TAG, CLASS_TAG + "Keycode: " + keyCodes[0]);
+		
 		if (primaryCode != Keyboard.KEYCODE_DELETE || 
 				when > mLastKeyTime + QUICK_PRESS) {
 			mDeleteCount = 0;
@@ -820,40 +816,84 @@ public class TeclaIME extends InputMethodService
 	}
 
 	private void handleCharacter(int primaryCode, int[] keyCodes) {
-		if (isAlphabet(primaryCode) && isPredictionOn() && !isCursorTouchingWord()) {
-			if (!mPredicting) {
-				mPredicting = true;
-				mComposing.setLength(0);
-				mWord.reset();
+		CharSequence variants = null;
+		TeclaKeyboard keyboard = mIMEView.getKeyboard();
+		Key key = keyboard.getKeyFromCode(primaryCode);
+		if (key != null) variants = key.popupCharacters;
+		if (TeclaApp.persistence.isVariantsOn() && variants != null && variants.length() > 0) {
+			// Key has variants!
+			mWasSymbols = mKeyboardSwitcher.isSymbols();
+			mWasShifted = keyboard.isShifted();
+			TeclaApp.persistence.setVariantsShowing(true);
+			switch (variants.length()) {
+			case 1:
+				mKeyboardSwitcher.setKeyboardMode(KeyboardSwitcher.MODE_1X3);
+				break;
+			case 2:
+				mKeyboardSwitcher.setKeyboardMode(KeyboardSwitcher.MODE_1X4);
+				break;
+			case 3:
+				mKeyboardSwitcher.setKeyboardMode(KeyboardSwitcher.MODE_1X5);
+				break;
+			case 4:
+				mKeyboardSwitcher.setKeyboardMode(KeyboardSwitcher.MODE_1X6);
+				break;
+			case 5:
+				mKeyboardSwitcher.setKeyboardMode(KeyboardSwitcher.MODE_1X7);
+				break;
+			case 6:
+				mKeyboardSwitcher.setKeyboardMode(KeyboardSwitcher.MODE_1X8);
+				break;
+			case 7:
+				mKeyboardSwitcher.setKeyboardMode(KeyboardSwitcher.MODE_1X9);
+				break;
+			case 8:
+				mKeyboardSwitcher.setKeyboardMode(KeyboardSwitcher.MODE_1X10);
+				break;
 			}
-		}
-		if (mIMEView.isShifted()) {
-			// TODO: This doesn't work with ß, need to fix it in the next release.
-			if (keyCodes == null || keyCodes[0] < Character.MIN_CODE_POINT
-					|| keyCodes[0] > Character.MAX_CODE_POINT) {
-				return;
-			}
-			primaryCode = new String(keyCodes, 0, 1).toUpperCase().charAt(0);
-		}
-		if (mPredicting) {
-			if (mIMEView.isShifted() && mComposing.length() == 0) {
-				mWord.setCapitalized(true);
-			}
-			mComposing.append((char) primaryCode);
-			mWord.add(primaryCode, keyCodes);
-			InputConnection ic = getCurrentInputConnection();
-			if (ic != null) {
-				ic.setComposingText(mComposing, 1);
-			}
-			postUpdateSuggestions();
+			populateVariants(key.label, variants);
+			mIMEView.getKeyboard().setShifted(mWasShifted);
+			evaluateStartScanning();
 		} else {
-			sendKeyChar((char)primaryCode);
+			if (isAlphabet(primaryCode) && isPredictionOn() && !isCursorTouchingWord()) {
+				if (!mPredicting) {
+					mPredicting = true;
+					mComposing.setLength(0);
+					mWord.reset();
+				}
+			}
+			if (mIMEView.isShifted()) {
+				// TODO: This doesn't work with ß, need to fix it in the next release.
+				if (keyCodes == null || keyCodes[0] < Character.MIN_CODE_POINT
+						|| keyCodes[0] > Character.MAX_CODE_POINT) {
+					return;
+				}
+				primaryCode = new String(keyCodes, 0, 1).toUpperCase().charAt(0);
+			}
+			if (mPredicting) {
+				if (mIMEView.isShifted() && mComposing.length() == 0) {
+					mWord.setCapitalized(true);
+				}
+				mComposing.append((char) primaryCode);
+				mWord.add(primaryCode, keyCodes);
+				InputConnection ic = getCurrentInputConnection();
+				if (ic != null) {
+					ic.setComposingText(mComposing, 1);
+				}
+				postUpdateSuggestions();
+			} else {
+				sendKeyChar((char)primaryCode);
+			}
+			updateShiftKeyState(getCurrentInputEditorInfo());
+			measureCps();
+			TextEntryState.typedCharacter((char) primaryCode, isWordSeparator(primaryCode));
+			if (mKeyboardSwitcher.isVariants()) {
+				doVariantsExit(primaryCode);
+				evaluateStartScanning();
+			}
 		}
-		updateShiftKeyState(getCurrentInputEditorInfo());
-		measureCps();
-		TextEntryState.typedCharacter((char) primaryCode, isWordSeparator(primaryCode));
 	}
-
+	
 	private void handleSeparator(int primaryCode) {
 		boolean pickedDefault = false;
 		// Handle separator
@@ -910,7 +950,7 @@ public class TeclaIME extends InputMethodService
 	private void toggleCapsLock() {
 		mCapsLock = !mCapsLock;
 		if (mKeyboardSwitcher.isAlphabetMode()) {
-			((LatinKeyboard) mIMEView.getKeyboard()).setShiftLocked(mCapsLock);
+			((TeclaKeyboard) mIMEView.getKeyboard()).setShiftLocked(mCapsLock);
 		}
 	}
 
@@ -1263,7 +1303,7 @@ public class TeclaIME extends InputMethodService
 	private void changeKeyboardMode() {
 		mKeyboardSwitcher.toggleSymbols();
 		if (mCapsLock && mKeyboardSwitcher.isAlphabetMode()) {
-			((LatinKeyboard) mIMEView.getKeyboard()).setShiftLocked(mCapsLock);
+			((TeclaKeyboard) mIMEView.getKeyboard()).setShiftLocked(mCapsLock);
 		}
 
 		updateShiftKeyState(getCurrentInputEditorInfo());
@@ -1345,13 +1385,14 @@ public class TeclaIME extends InputMethodService
 
 	//TODO: Try moving these variables to TeclaApp class
 	private String mVoiceInputString;
-	private int mLastKeyboardMode, mLastNonUIKeyboardMode;
+	private int mLastKeyboardMode, mLastFullKeyboardMode;
 	private boolean mShieldConnected, mRepeating;
 	private PopupWindow mSwitchPopup;
 	private View mSwitch;
 	private Handler mTeclaHandler;
 	private int[] mKeyCodes;
-	private boolean isNavKbdTimedOut;
+	private boolean mIsNavKbdTimedOut;
+	private boolean mWasSymbols, mWasShifted;
 
 	private void initTeclaA11y() {
 
@@ -1367,10 +1408,12 @@ public class TeclaIME extends InputMethodService
 		registerReceiver(mReceiver, new IntentFilter(Highlighter.ACTION_STOP_SCANNING));
 		registerReceiver(mReceiver, new IntentFilter(TeclaApp.ACTION_INPUT_STRING));
 
-		 mLastNonUIKeyboardMode = KeyboardSwitcher.MODE_TEXT;
+		 mLastFullKeyboardMode = KeyboardSwitcher.MODE_TEXT;
 		 mTeclaHandler = new Handler();
 		 mShieldConnected = false;
 		 mRepeating = false;
+		 mWasSymbols = false;
+		 mWasShifted = false;
 		 
 		if (TeclaApp.persistence.isPersistentKeyboardEnabled()) {
 			TeclaApp.getInstance().queueSplash();
@@ -1397,8 +1440,8 @@ public class TeclaIME extends InputMethodService
 	private void handleSwitchEvent(SwitchEvent switchEvent) {
 
 		cancelNavKbdTimeout();
-		if (!TeclaApp.highlighter.isSoftIMEShowing()) {
-			showSoftIME();
+		if (!TeclaApp.highlighter.isSoftIMEShowing() && TeclaApp.persistence.isPersistentKeyboardEnabled()) {
+			showIMEView();
 			TeclaApp.highlighter.startSelfScanning();
 		} else {
 			if (TeclaApp.DEBUG) Log.d(TeclaApp.TAG, CLASS_TAG + "Switch event received: " +
@@ -1448,7 +1491,7 @@ public class TeclaIME extends InputMethodService
 	 * Determine weather the current keyboard should auto-hide.
 	 */
 	private void evaluateNavKbdTimeout() {
-		if(mKeyboardSwitcher.getKeyboardMode() == KeyboardSwitcher.MODE_NAV) {
+		if(mKeyboardSwitcher.isNavigation()) {
 			resetNavKbdTimeout();
 		} else {
 			cancelNavKbdTimeout();
@@ -1459,7 +1502,7 @@ public class TeclaIME extends InputMethodService
 	 * Cancel any currently active calls to auto-hide the keyboard.
 	 */
 	private void cancelNavKbdTimeout() {
-		isNavKbdTimedOut = false;
+		mIsNavKbdTimedOut = false;
 		mTeclaHandler.removeCallbacks(hideNavKbdRunnable);
 	}
 
@@ -1475,10 +1518,9 @@ public class TeclaIME extends InputMethodService
 	}
 
 	private Runnable hideNavKbdRunnable = new Runnable() {
-		@Override
 		public void run() {
 			if (TeclaApp.DEBUG) Log.d(TeclaApp.TAG, CLASS_TAG + "Navigation keyboard timed out!");
-			isNavKbdTimedOut = true;
+			mIsNavKbdTimedOut = true;
 			hideSoftIME();
 		}
 	};
@@ -1512,27 +1554,45 @@ public class TeclaIME extends InputMethodService
 				&& (keycode<=KeyEvent.KEYCODE_DPAD_CENTER))
 				|| (keycode == KeyEvent.KEYCODE_BACK)
 				|| (keycode == Keyboard.KEYCODE_DONE)
-				|| (keycode == TeclaApp.getInstance().KEYCODE_VOICE);
+				|| (keycode == TeclaKeyboard.KEYCODE_VOICE)
+				|| (keycode == TeclaKeyboard.KEYCODE_VARIANTS);
 	}
 
 	private void handleSpecialKey(int keyEventCode) {
-		int thisKBMode = mKeyboardSwitcher.getKeyboardMode();
 		if (keyEventCode == Keyboard.KEYCODE_DONE) {
-			if (thisKBMode != KeyboardSwitcher.MODE_NAV) {
+			if (!mKeyboardSwitcher.isNavigation() && !mKeyboardSwitcher.isVariants()) {
 				// Closing
-				mLastNonUIKeyboardMode = thisKBMode;
+				mLastFullKeyboardMode = mKeyboardSwitcher.getKeyboardMode();
+				mWasShifted = mIMEView.getKeyboard().isShifted();
 				hideSoftIME();
-			}
-			else {
+			} else {
 				// Opening
-				mKeyboardSwitcher.setKeyboardMode(mLastNonUIKeyboardMode, 0);
+				if (mKeyboardSwitcher.isVariants()) {
+					doVariantsExit(keyEventCode);
+				} else {
+					mKeyboardSwitcher.setKeyboardMode(mLastFullKeyboardMode);
+					mIMEView.getKeyboard().setShifted(mWasShifted);
+				}
 				evaluateStartScanning();
 			}
-		} else if (keyEventCode == TeclaApp.getInstance().KEYCODE_VOICE) {
-			if (thisKBMode == KeyboardSwitcher.MODE_NAV) {
+		} else if (keyEventCode == TeclaKeyboard.KEYCODE_VOICE) {
+			if (mKeyboardSwitcher.isNavigation()) {
 				TeclaApp.getInstance().broadcastVoiceCommand();
 			} else {
 				TeclaApp.getInstance().startVoiceInput(RecognizerIntent.LANGUAGE_MODEL_FREE_FORM);
+			}
+		} else if (keyEventCode ==  TeclaKeyboard.KEYCODE_VARIANTS) {
+			Key key = mIMEView.getKeyboard().getVariantsKey();
+			if (key != null) {
+				Log.d(TeclaApp.TAG, CLASS_TAG + "Variants key code is " + key.codes[0]);
+				if (TeclaApp.persistence.isVariantsOn()) {
+					TeclaApp.persistence.setVariantsOff();
+					key.on = false;
+				} else {
+					TeclaApp.persistence.setVariantsOn();
+					key.on = true;
+				}
+				mIMEView.invalidateAllKeys();
 			}
 		} else {
 			keyDownUp(keyEventCode);
@@ -1550,7 +1610,9 @@ public class TeclaIME extends InputMethodService
 	}
 
 	private boolean isRepeatableWithTecla(int code) {
-		if (code == Keyboard.KEYCODE_DONE ||code == TeclaApp.getInstance().KEYCODE_VOICE) {
+		if (code == TeclaKeyboard.KEYCODE_DONE ||
+				code == TeclaKeyboard.KEYCODE_VOICE ||
+				code == TeclaKeyboard.KEYCODE_VARIANTS) {
 			return false;
 		}
 		return true;
@@ -1565,7 +1627,6 @@ public class TeclaIME extends InputMethodService
 	}
 
 	private Runnable mRepeatKeyRunnable = new Runnable() {
-		@Override
 		public void run() {
 			emulateKeyPress(mKeyCodes);
 			if (mRepeating) {
@@ -1719,14 +1780,18 @@ public class TeclaIME extends InputMethodService
 		return TeclaApp.persistence.isPersistentKeyboardEnabled();
 	}
 
-	private void showSoftIME() {
+	private void showIMEView() {
 		if (TeclaApp.highlighter.isSoftIMEShowing()) {
 			if (TeclaApp.DEBUG) Log.d(TeclaApp.TAG, CLASS_TAG + "Soft IME is already showing");
 		} else {
 			showWindow(true);
 			updateInputViewShown();
+			// Fixes https://github.com/jorgesilva/TeclaAccess/issues/3
+			if (TeclaApp.highlighter.isSoftIMEShowing()) {
+				mKeyboardSwitcher.setKeyboardMode(KeyboardSwitcher.MODE_NAV);
+			}
 			// This call causes a looped intent call until the IME View is created
-			callShowSoftIMEWatchDog(500);
+			callShowSoftIMEWatchDog(350);
 		}
 	}
 	
@@ -1742,7 +1807,7 @@ public class TeclaIME extends InputMethodService
 				// If IME View still not showing...
 				// We are force-openning the soft IME through an intent since
 				//it seems to be the only way to make it work
-				TeclaApp.getInstance().requestSoftIME();
+				TeclaApp.getInstance().requestShowIMEView();
 			}
 		}
 		
@@ -1751,6 +1816,43 @@ public class TeclaIME extends InputMethodService
 	private void hideSoftIME() {
 		hideWindow();
 		updateInputViewShown();
+	}
+	
+	// TODO: Consider moving to TeclaKeyboardView or TeclaKeyboard
+	private void populateVariants (CharSequence keyLabel, CharSequence popupChars) {
+		List<Key> keyList = mIMEView.getKeyboard().getKeys();
+		Key key = keyList.get(0);
+		CharSequence sequence;
+		
+		key.label = keyLabel;
+		key.codes = new int[1];
+		key.codes[0] = (int) keyLabel.charAt(0);
+		for (int i=0; i < popupChars.length(); i++) {
+			key = keyList.get(i+1);
+			sequence = popupChars.subSequence(i, i+1);
+			key.label = sequence;
+			key.codes = new int[1];
+			key.codes[0] = (int) sequence.charAt(0);
+			if (TeclaApp.DEBUG) Log.d(TeclaApp.TAG, CLASS_TAG + "Populating char: " + sequence.toString());
+		}
+	}
+
+	private void doVariantsExit(int keyCode) {
+		TeclaApp.persistence.setVariantsShowing(false);
+		mKeyboardSwitcher.setKeyboardMode(mLastFullKeyboardMode);
+		if (mWasSymbols && !mKeyboardSwitcher.isSymbols()) {
+			mKeyboardSwitcher.toggleSymbols();
+		}
+		if (mWasShifted && mWasSymbols) {
+			handleShift();
+		} else {
+			mIMEView.setShifted(mWasShifted);
+		}
+		if (keyCode != TeclaKeyboard.KEYCODE_DONE) {
+			TeclaApp.persistence.setVariantsOff();
+			Key key = mIMEView.getKeyboard().getVariantsKey();
+			key.on = false;
+		}
 	}
 
 }

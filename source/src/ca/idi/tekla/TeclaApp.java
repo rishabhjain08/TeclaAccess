@@ -52,8 +52,6 @@ public class TeclaApp extends Application {
 	private static final long BOOT_TIMEOUT = 60000;
 	private static final int WAKE_LOCK_TIMEOUT = 5000;
 	
-	public int KEYCODE_VOICE;
-
 	private PowerManager mPowerManager;
 	private KeyguardManager mKeyguardManager;
 	private KeyguardLock mKeyguardLock;
@@ -91,8 +89,6 @@ public class TeclaApp extends Application {
 		if (TeclaApp.DEBUG) android.os.Debug.waitForDebugger();
 		Log.d(TAG, "TECLA APP STARTING ON " + Build.MODEL + " BY " + Build.MANUFACTURER);
 		
-		KEYCODE_VOICE = getResources().getInteger(R.integer.key_voice);
-
 		persistence = new Persistence(this);
 		highlighter = new Highlighter(this);
 
@@ -147,34 +143,23 @@ public class TeclaApp extends Application {
 			if (intent.getAction().equals(Intent.ACTION_SCREEN_ON)) {
 				if (TeclaApp.DEBUG) Log.d(TeclaApp.TAG, "Screen on");
 				persistence.setScreenOn();
-				requestSoftIME();
+				if (persistence.isPersistentKeyboardEnabled()) requestShowIMEView();
 			}
-//			if (intent.getAction().equals(TelephonyManager.ACTION_PHONE_STATE_CHANGED)) {
-//				if (TeclaApp.DEBUG) Log.d(TeclaApp.TAG, CLASS_TAG + "Phone state changed");
-//				if (intent.hasExtra(TelephonyManager.EXTRA_STATE)) {
-//					TelephonyManager tm = (TelephonyManager) context.getSystemService(Context.TELEPHONY_SERVICE);
-//					if (tm.getCallState() == TelephonyManager.CALL_STATE_RINGING) {
-//						if (TeclaApp.DEBUG) Log.d(TeclaApp.TAG, CLASS_TAG + "Phone ringing");
-//						mPhoneRinging = true;
-//					}
-//				}
-//			}
 		}
 
 	};
 
-	public void requestSoftIME() {
-		requestSoftIME(0);
+	public void requestShowIMEView() {
+		requestShowIMEView(0);
 	}
 	
-	public void requestSoftIME(long delay) {
-		mHandler.removeCallbacks(mRequestSoftIMERunnable);
-		mHandler.postDelayed(mRequestSoftIMERunnable, delay);
+	public void requestShowIMEView(long delay) {
+		mHandler.removeCallbacks(mRequestShowIMERunnable);
+		mHandler.postDelayed(mRequestShowIMERunnable, delay);
 	}
 	
-	private Runnable mRequestSoftIMERunnable = new Runnable() {
+	private Runnable mRequestShowIMERunnable = new Runnable() {
 
-		@Override
 		public void run() {
 			if (DEBUG) Log.d(TAG, "Broadcasting show IME intent...");
 			sendBroadcast(new Intent(ACTION_SHOW_IME));
@@ -182,7 +167,7 @@ public class TeclaApp extends Application {
 		
 	};
 
-	public void hideSoftIME() {
+	public void requestHideIMEView() {
 		if (DEBUG) Log.d(TAG, "Broadcasting hide IME intent...");
 		sendBroadcast(new Intent(ACTION_HIDE_IME));
 	}
@@ -243,23 +228,26 @@ public class TeclaApp extends Application {
 		if (isDefaultIME()) {
 			long now = SystemClock.uptimeMillis();
 			if (persistence.isPersistentKeyboardEnabled()) {
-				// Show configuration splash
 				if (now < BOOT_TIMEOUT) {
 					// If just booted, wait a bit before calling splash
 					Log.w(TeclaApp.TAG, "Delayed call to show splash screen");
-					new Handler().postAtTime(new Runnable() {
-
-						public void run() {
-							showSplashScreen();
-						}
-						
-					}, BOOT_TIMEOUT);
+					mHandler.removeCallbacks(mShowSplashRunnable);
+					mHandler.postAtTime(mShowSplashRunnable, BOOT_TIMEOUT);
 				} else {
-					showSplashScreen();
+					mHandler.post(mShowSplashRunnable);
 				}
 			}
 		}
 	}
+	
+	private Runnable mShowSplashRunnable = new Runnable() {
+
+		public void run() {
+			// Show configuration splash
+			showSplashScreen();
+		}
+		
+	};
 
 	public void showSplashScreen() {
 		if (DEBUG) Log.d(TAG, "Showing splash screen...");
@@ -355,6 +343,17 @@ public class TeclaApp extends Application {
 		mKeyguardLock.reenableKeyguard();
 	}
 	
+	/**
+	 * Hold wake lock until releaseWakeLock() is called.
+	 */
+	public void holdWakeLock() {
+		holdWakeLock(0);
+	}
+	
+	/**
+	 * Hold wake lock for the number of seconds specified by length
+	 * @param length the number of seconds to hold the wake lock for
+	 */
 	public void holdWakeLock(long length) {
 		if (DEBUG) Log.d(TeclaApp.TAG, "Aquiring wake lock...");
 		if (length > 0) {
@@ -370,6 +369,9 @@ public class TeclaApp extends Application {
 		mWakeLock.release();
 	}
 	
+	/**
+	 * Wakes and unlocks the screen for a minimum of {@link WAKE_LOCK_TIMEOUT} miliseconds
+	 */
 	public void wakeUnlockScreen() {
 		holdKeyguardLock();
 		holdWakeLock(WAKE_LOCK_TIMEOUT);

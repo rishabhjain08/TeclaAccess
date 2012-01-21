@@ -21,8 +21,6 @@ import java.util.Map;
 
 import ca.idi.tekla.R;
 import ca.idi.tekla.TeclaApp;
-import ca.idi.tekla.R.id;
-import ca.idi.tekla.R.xml;
 
 public class KeyboardSwitcher {
 
@@ -33,6 +31,14 @@ public class KeyboardSwitcher {
     public static final int MODE_EMAIL = 5;
     public static final int MODE_IM = 6;
     public static final int MODE_NAV = 7;
+    public static final int MODE_1X3 = 8;
+    public static final int MODE_1X4 = 9;
+    public static final int MODE_1X5 = 10;
+    public static final int MODE_1X6 = 11;
+    public static final int MODE_1X7 = 12;
+    public static final int MODE_1X8 = 13;
+    public static final int MODE_1X9 = 14;
+    public static final int MODE_1X10 = 15;
     
     public static final int MODE_TEXT_QWERTY = 0;
     public static final int MODE_TEXT_ALPHA = 1;
@@ -42,7 +48,9 @@ public class KeyboardSwitcher {
     public static final int KEYBOARDMODE_URL = R.id.mode_url;
     public static final int KEYBOARDMODE_EMAIL = R.id.mode_email;
     public static final int KEYBOARDMODE_IM = R.id.mode_im;
-
+    public static final int KEYBOARDMODE_VOICE = R.id.mode_voice;
+    public static final int KEYBOARDMODE_VARIANTS = R.id.mode_variants;
+    
     private static final int SYMBOLS_MODE_STATE_NONE = 0;
     private static final int SYMBOLS_MODE_STATE_BEGIN = 1;
     private static final int SYMBOLS_MODE_STATE_SYMBOL = 2;
@@ -54,7 +62,7 @@ public class KeyboardSwitcher {
     private KeyboardId mSymbolsShiftedId;
 
     private KeyboardId mCurrentId;
-    private Map<KeyboardId, LatinKeyboard> mKeyboards;
+    private Map<KeyboardId, TeclaKeyboard> mKeyboards;
     
     private int mMode;
     private int mImeOptions;
@@ -67,7 +75,7 @@ public class KeyboardSwitcher {
 
     KeyboardSwitcher(TeclaIME context) {
         mContext = context;
-        mKeyboards = new HashMap<KeyboardId, LatinKeyboard>();
+        mKeyboards = new HashMap<KeyboardId, TeclaKeyboard>();
         mSymbolsId = new KeyboardId(R.xml.kbd_symbols);
         mSymbolsShiftedId = new KeyboardId(R.xml.kbd_symbols_shift);
     }
@@ -121,6 +129,20 @@ public class KeyboardSwitcher {
         }
     }
 
+    /**
+     * Forces a reset of the last keyboard mode
+     */
+    public void setKeyboardMode() {
+    	setKeyboardMode(mMode, mImeOptions);
+    }
+    
+    /**
+     * Sets the keyboard mode using the most recently set IME Options
+     */
+    public void setKeyboardMode(int mode) {
+    	setKeyboardMode(mode, mImeOptions);
+    }
+    
     void setKeyboardMode(int mode, int imeOptions) {
         mSymbolsModeState = SYMBOLS_MODE_STATE_NONE;
         mPreferSymbols = mode == MODE_SYMBOLS;
@@ -134,7 +156,7 @@ public class KeyboardSwitcher {
         mIsSymbols = isSymbols;
         mIMEView.setPreviewEnabled(true);
         KeyboardId id = getKeyboardId(mode, imeOptions, isSymbols);
-        LatinKeyboard keyboard = getKeyboard(id);
+        TeclaKeyboard keyboard = getKeyboard(id);
 
         if (mode == MODE_PHONE) {
             mIMEView.setPhoneKeyboard(keyboard);
@@ -146,12 +168,13 @@ public class KeyboardSwitcher {
         keyboard.setShifted(false);
         keyboard.setShiftLocked(keyboard.isShiftLocked());
         keyboard.setImeOptions(mContext.getResources(), mMode, imeOptions);
+        keyboard.updateVariantsState();
 
     }
 
-    private LatinKeyboard getKeyboard(KeyboardId id) {
+    private TeclaKeyboard getKeyboard(KeyboardId id) {
         if (!mKeyboards.containsKey(id)) {
-            LatinKeyboard keyboard = new LatinKeyboard(
+            TeclaKeyboard keyboard = new TeclaKeyboard(
                 mContext, id.mXml, id.mMode);
             if (id.mEnableShiftLock) {
                 keyboard.enableShiftLock();
@@ -166,6 +189,8 @@ public class KeyboardSwitcher {
     	boolean useVoiceInput =
     			TeclaApp.getInstance().isVoiceInputSupported() && 
     			TeclaApp.persistence.isVoiceInputEnabled();
+    	boolean scanVariants =
+    			TeclaApp.persistence.isVariantsKeyEnabled();
     	
         if (isSymbols) {
             return (mode == MODE_PHONE)
@@ -174,13 +199,29 @@ public class KeyboardSwitcher {
 
         switch (mode) {
             case MODE_TEXT:
-            	if (useVoiceInput) {
+            	if (useVoiceInput && scanVariants) {
+            		// Using voice input AND scanning variants
+                    if (mTextMode == MODE_TEXT_QWERTY) {
+                        return new KeyboardId(R.xml.kbd_qwerty_voice_variants, KEYBOARDMODE_NORMAL, true);
+                    } else if (mTextMode == MODE_TEXT_ALPHA) {
+                        return new KeyboardId(R.xml.kbd_alpha_voice_variants, KEYBOARDMODE_NORMAL, true);
+                    }
+            	} else if (useVoiceInput) {
+            		// Using voice input only
                     if (mTextMode == MODE_TEXT_QWERTY) {
                         return new KeyboardId(R.xml.kbd_qwerty_voice, KEYBOARDMODE_NORMAL, true);
                     } else if (mTextMode == MODE_TEXT_ALPHA) {
-                        return new KeyboardId(R.xml.kbd_alpha_voice, KEYBOARDMODE_NORMAL, true);
+                        return new KeyboardId(R.xml.kbd_alpha, KEYBOARDMODE_VOICE, true);
                     }
-            	}
+            	} else if (scanVariants) {
+            		// Scanning variants only
+                    if (mTextMode == MODE_TEXT_QWERTY) {
+                        return new KeyboardId(R.xml.kbd_qwerty_variants, KEYBOARDMODE_NORMAL, true);
+                    } else if (mTextMode == MODE_TEXT_ALPHA) {
+                        return new KeyboardId(R.xml.kbd_alpha, KEYBOARDMODE_VARIANTS, true);
+                    }
+            	} else
+            	//Default
                 if (mTextMode == MODE_TEXT_QWERTY) {
                     return new KeyboardId(R.xml.kbd_qwerty, KEYBOARDMODE_NORMAL, true);
                 } else if (mTextMode == MODE_TEXT_ALPHA) {
@@ -208,13 +249,29 @@ public class KeyboardSwitcher {
                 return new KeyboardId(R.xml.kbd_qwerty, KEYBOARDMODE_IM, true);
             case MODE_NAV:
             	if (useVoiceInput) {
-                    return new KeyboardId(R.xml.kbd_navigation_voice, KEYBOARDMODE_NORMAL, true);
+            		return new KeyboardId(R.xml.kbd_navigation, KEYBOARDMODE_VOICE, true);
             	}
                 return new KeyboardId(R.xml.kbd_navigation, KEYBOARDMODE_NORMAL, true);
+            case MODE_1X3:
+                return new KeyboardId(R.xml.kbd_1x3, KEYBOARDMODE_NORMAL, true);
+            case MODE_1X4:
+                return new KeyboardId(R.xml.kbd_1x4, KEYBOARDMODE_NORMAL, true);
+            case MODE_1X5:
+                return new KeyboardId(R.xml.kbd_1x5, KEYBOARDMODE_NORMAL, true);
+            case MODE_1X6:
+                return new KeyboardId(R.xml.kbd_1x6, KEYBOARDMODE_NORMAL, true);
+            case MODE_1X7:
+                return new KeyboardId(R.xml.kbd_1x7, KEYBOARDMODE_NORMAL, true);
+            case MODE_1X8:
+                return new KeyboardId(R.xml.kbd_1x8, KEYBOARDMODE_NORMAL, true);
+            case MODE_1X9:
+                return new KeyboardId(R.xml.kbd_1x9, KEYBOARDMODE_NORMAL, true);
+            case MODE_1X10:
+                return new KeyboardId(R.xml.kbd_1x10, KEYBOARDMODE_NORMAL, true);
         }
         return null;
     }
-
+    
     int getKeyboardMode() {
         return mMode;
     }
@@ -250,16 +307,16 @@ public class KeyboardSwitcher {
 
     void toggleShift() {
         if (mCurrentId.equals(mSymbolsId)) {
-            LatinKeyboard symbolsKeyboard = getKeyboard(mSymbolsId);
-            LatinKeyboard symbolsShiftedKeyboard = getKeyboard(mSymbolsShiftedId);
+            TeclaKeyboard symbolsKeyboard = getKeyboard(mSymbolsId);
+            TeclaKeyboard symbolsShiftedKeyboard = getKeyboard(mSymbolsShiftedId);
             symbolsKeyboard.setShifted(true);
             mCurrentId = mSymbolsShiftedId;
             mIMEView.setKeyboard(symbolsShiftedKeyboard);
             symbolsShiftedKeyboard.setShifted(true);
             symbolsShiftedKeyboard.setImeOptions(mContext.getResources(), mMode, mImeOptions);
         } else if (mCurrentId.equals(mSymbolsShiftedId)) {
-            LatinKeyboard symbolsKeyboard = getKeyboard(mSymbolsId);
-            LatinKeyboard symbolsShiftedKeyboard = getKeyboard(mSymbolsShiftedId);
+            TeclaKeyboard symbolsKeyboard = getKeyboard(mSymbolsId);
+            TeclaKeyboard symbolsShiftedKeyboard = getKeyboard(mSymbolsShiftedId);
             symbolsShiftedKeyboard.setShifted(false);
             mCurrentId = mSymbolsId;
             mIMEView.setKeyboard(getKeyboard(mSymbolsId));
@@ -275,6 +332,31 @@ public class KeyboardSwitcher {
         } else {
             mSymbolsModeState = SYMBOLS_MODE_STATE_NONE;
         }
+    }
+    
+    boolean isSymbols() {
+    	return mIsSymbols;
+    }
+
+    boolean isVariants() {
+		if (mMode == MODE_1X3 ||
+				mMode == MODE_1X4 ||
+				mMode == MODE_1X5 ||
+				mMode == MODE_1X6 ||
+				mMode == MODE_1X7 ||
+				mMode == MODE_1X8 ||
+				mMode == MODE_1X9 ||
+				mMode == MODE_1X10) {
+			return true;
+		}
+		return false;
+    }
+
+    boolean isNavigation() {
+		if (mMode == MODE_NAV) {
+			return true;
+		}
+		return false;
     }
 
     /**

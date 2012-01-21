@@ -36,9 +36,8 @@ import android.telephony.TelephonyManager;
 import android.util.Log;
 
 public class SwitchEventProvider extends Service implements Runnable {
-
+	
 	//Constants
-
 	/**
 	 * Tag used for logging in this class
 	 */
@@ -54,8 +53,8 @@ public class SwitchEventProvider extends Service implements Runnable {
 
 	public static final String EXTRA_SWITCH_EVENT = "ca.idi.tekla.sep.extra.SWITCH_EVENT";
 	
-	public static final String PREFIX_SHIELD = "TeklaShield";
-	public static final String PREFIX_SHIELD_V1 = "FireFly";
+	public static final String SHIELD_PREFIX_2 = "TeklaShield";
+	public static final String SHIELD_PREFIX_3 = "TeclaShield";
 	
 	public static final int NULL_SHIELD_VERSION = -1;
 
@@ -74,11 +73,19 @@ public class SwitchEventProvider extends Service implements Runnable {
 	private static final int PING_DELAY = 2000; //milliseconds
 	private static final int PING_TIMEOUT_COUNTER = 4;
 
+	private static final int SHIELD_RECONNECT_DELAY = 5000; //milliseconds
+	private static final int SHY_RECONNECT_ATTEMPTS = 20; // * SHIELD_RECONNECT_DELAY = SHY_RECONNECT_DELAY
+	private static final int BOLD_RECONNECT_ATTEMPTS = 2; //
+	
+	private int mShyCounter, mBoldCounter;
+	private boolean mIsBold;
+
 	private BluetoothSocket mBluetoothSocket;
 	private OutputStream mOutStream;
 	private InputStream mInStream;
 
 	// VARIABLES FOR SWITCH PROCESSING
+	// TODO: This variable should be used when new Shield versions are available
 	private int mShieldVersion;
 	private int mPrevSwitchStates, mSwitchStates;
 	private boolean mPhoneRinging;
@@ -122,14 +129,18 @@ public class SwitchEventProvider extends Service implements Runnable {
 		mPrevSwitchStates = STATE_DEFAULT;
 		mShieldVersion = NULL_SHIELD_VERSION;
 		mServiceStarted = false;
+		
+		mShyCounter = 0;
+		mBoldCounter = 0;
+		mIsBold = false;
 	}
 	
 	@Override
 	public void onDestroy() {
+		super.onDestroy();
 		stopMainThread();
 		unregisterReceiver(mReceiver);
-		Log.d(TeclaApp.TAG, CLASS_TAG + "Service Stopped");
-		super.onDestroy();
+		Log.i(TeclaApp.TAG, CLASS_TAG + "Service Stopped");
 	}
 
 	@Override
@@ -199,6 +210,25 @@ public class SwitchEventProvider extends Service implements Runnable {
 
 		shieldAddress = TeclaApp.persistence.getShieldAddress();
 		while(mKeepReconnecting) {
+			Log.i(TeclaApp.TAG, CLASS_TAG + "Attempting connection to TeclaShield: " + shieldAddress);
+			// The code below is an attempt to poke the bluetooth chip on devices that put it on stand-by when the
+			// screen is off (e.g., Samsung Galaxy series). For additional details see
+			// https://github.com/jorgesilva/TeclaAccess/issues/11
+			if (!mIsBold) {
+				mShyCounter++;
+				if (mShyCounter >= SHY_RECONNECT_ATTEMPTS) {
+					mShyCounter = 0;
+					TeclaApp.getInstance().holdWakeLock();
+					mIsBold = true;
+				}
+			} else {
+				mBoldCounter++;
+				if (mBoldCounter >= BOLD_RECONNECT_ATTEMPTS) {
+					mBoldCounter = 0;
+					TeclaApp.getInstance().releaseWakeLock();
+					mIsBold = false;
+				}
+			}
 			gotStreams = false;
 			if (openSocket(shieldAddress)) {
 				try {
@@ -207,7 +237,7 @@ public class SwitchEventProvider extends Service implements Runnable {
 					gotStreams = true;
 				} catch (IOException e) {
 					e.printStackTrace();
-					Log.e(TeclaApp.TAG, CLASS_TAG + "BTStreams: " + e.getMessage());
+					Log.e(TeclaApp.TAG, CLASS_TAG + "Error getting streams: " + e.getMessage());
 				}
 
 				if (gotStreams) {
@@ -222,7 +252,7 @@ public class SwitchEventProvider extends Service implements Runnable {
 					while(mIsBroadcasting) {
 						try {
 							inByte = mInStream.read();
-							if (TeclaApp.DEBUG) Log.d(TeclaApp.TAG, CLASS_TAG + "Byte received: " +
+							if (TeclaApp.DEBUG) Log.v(TeclaApp.TAG, CLASS_TAG + "Byte received: " +
 									TeclaApp.getInstance().byte2Hex(inByte) + "at " + SystemClock.uptimeMillis());
 							if (inByte != 0xffffffff) { // Work-around for Samsung Galaxy 
 								if (inByte == STATE_PING) {
@@ -242,12 +272,19 @@ public class SwitchEventProvider extends Service implements Runnable {
 					}
 					broadcastShieldDisconnected();
 					cancelNotification();
-					Log.d(TeclaApp.TAG, CLASS_TAG + "Disconnected from Tecla Shield");
+					Log.w(TeclaApp.TAG, CLASS_TAG + "Disconnected from Tecla Shield");
+					TeclaApp.getInstance().wakeUnlockScreen();
+					//Need to toast on a separate thread!
+					mHandler.post(new Runnable () {
+						public void run() {
+							TeclaApp.getInstance().showToast(R.string.shield_disconnected);
+						}
+					});
 				}
 			}
 			if (mKeepReconnecting) {
-				int delay = 3 * PING_DELAY;
-				if (TeclaApp.DEBUG) Log.d(TeclaApp.TAG, CLASS_TAG + "Connection will be attempted in " + delay + " miliseconds.");
+				long delay = SHIELD_RECONNECT_DELAY;
+				Log.i(TeclaApp.TAG, CLASS_TAG + "Connection will be attempted in " + delay + " miliseconds.");
 				try {
 					Thread.sleep(delay);
 				} catch (InterruptedException e) {
@@ -264,7 +301,8 @@ public class SwitchEventProvider extends Service implements Runnable {
 			if (TeclaApp.DEBUG) Log.d(TeclaApp.TAG, CLASS_TAG + "Filtered switch event received");
 			TeclaApp.getInstance().cancelFullReset();
 			//FIXME: This is a temporal work-around for compatibility with older Shield versions
-			if (mShieldVersion < 2) mSwitchStates ^= 0x30;
+			//TODO: Deprecated, safe to remove in subsequent builds
+			//if (mShieldVersion < 2) mSwitchStates ^= 0x30;
 			
 			int switchChanges = mPrevSwitchStates ^ mSwitchStates; // Sets bits of switch states that changed
 
@@ -331,7 +369,6 @@ public class SwitchEventProvider extends Service implements Runnable {
 				Log.e(TeclaApp.TAG, CLASS_TAG + "killSocket: " + e.getMessage());
 				e.printStackTrace();
 			}
-			mBluetoothSocket = null; //Reset socket
 		}
 		if (TeclaApp.DEBUG) Log.d(TeclaApp.TAG, CLASS_TAG + "Socket killed");
 	}
@@ -382,44 +419,27 @@ public class SwitchEventProvider extends Service implements Runnable {
 			}
 			
 			if (!success) {
-				/*
-				 * WARNING! The reflection method for creating a Bluetooth socket
-				 * does not work on the LG Phoenix (LG-P505R)
-				 */
-				if (!(Build.MODEL.equals("LG-P505R")  && Build.MANUFACTURER.equals("LGE"))) {
-					// Try using reflection
-					Log.w(TeclaApp.TAG, CLASS_TAG + "Creating bluetooth serial socket using reflection...");
-					killSocket();
-					Method m = null;
-					try {
-						m = teclaShield.getClass().getMethod("createRfcommSocket", new Class[] {int.class});
-						mBluetoothSocket = (BluetoothSocket) m.invoke(teclaShield, 1);
-					} catch (SecurityException e) {
-						Log.e(TeclaApp.TAG, CLASS_TAG + "openSocket with reflection: " + e.getMessage());
-						e.printStackTrace();
-					} catch (NoSuchMethodException e) {
-						Log.e(TeclaApp.TAG, CLASS_TAG + "openSocket with reflection: " + e.getMessage());
-						e.printStackTrace();
-					} catch (IllegalArgumentException e) {
-						Log.e(TeclaApp.TAG, CLASS_TAG + "openSocket with reflection: " + e.getMessage());
-						e.printStackTrace();
-					} catch (IllegalAccessException e) {
-						Log.e(TeclaApp.TAG, CLASS_TAG + "openSocket with reflection: " + e.getMessage());
-						e.printStackTrace();
-					} catch (InvocationTargetException e) {
-						Log.e(TeclaApp.TAG, CLASS_TAG + "openSocket with reflection: " + e.getMessage());
-						e.printStackTrace();
-					}
-					success = connectSocket();
+				if (    Build.MODEL.equals("ReflectionCompatibleModel") &&
+						Build.MANUFACTURER.equals("ReflectionCompatibleManufacturer")) {
+					/*
+					 * WARNING! Although fast, the reflection method for reconnecting a lost Bluetooth connection
+					 * can fail silently and sometimes lock the App and the Bluetooth chip. This method should be
+					 * deprecated. Devices know NOT to work with reflection are:
+					 *   LG Phoenix (LG-P505R)
+					 *   Samsung Galaxy (SGH-T989D)
+					 */
+					success = createSocketWithReflection(teclaShield);
 				} else {
-					Log.w(TeclaApp.TAG, CLASS_TAG + "Will not attempt to open bluetooth serial socket with reflection");
+					if (TeclaApp.DEBUG) Log.v(TeclaApp.TAG, CLASS_TAG + "Will not attempt to open bluetooth serial socket with reflection");
 				}
 			}
 			if (!success) {
 				killSocket(); //Still no success, kill socket
-				Log.d(TeclaApp.TAG, CLASS_TAG + "Could not open socket");
+				Log.i(TeclaApp.TAG, CLASS_TAG + "Could not open socket");
 			} else {
-				mShieldVersion = teclaShield.getName().startsWith(PREFIX_SHIELD_V1)? 1:2;
+				// TODO: Assign Shield version here, version 1 is deprecated
+				//mShieldVersion = teclaShield.getName().startsWith(PREFIX_SHIELD_V1)? 1:2;
+				mShieldVersion = 2;
 			}
 		} else {
 			Log.w(TeclaApp.TAG, CLASS_TAG + "Can't open socket. Bluetooth is disabled.");
@@ -427,8 +447,38 @@ public class SwitchEventProvider extends Service implements Runnable {
 		return success;
 	}
 
+	private boolean createSocketWithReflection(BluetoothDevice teclaShield) {
+		// Try using reflection
+		Log.w(TeclaApp.TAG, CLASS_TAG + "Creating bluetooth serial socket using reflection...");
+		killSocket();
+		Method m = null;
+		try {
+			m = teclaShield.getClass().getMethod("createRfcommSocket", new Class[] {int.class});
+			mBluetoothSocket = (BluetoothSocket) m.invoke(teclaShield, 1);
+		} catch (SecurityException e) {
+			Log.e(TeclaApp.TAG, CLASS_TAG + "openSocket with reflection: " + e.getMessage());
+			e.printStackTrace();
+		} catch (NoSuchMethodException e) {
+			Log.e(TeclaApp.TAG, CLASS_TAG + "openSocket with reflection: " + e.getMessage());
+			e.printStackTrace();
+		} catch (IllegalArgumentException e) {
+			Log.e(TeclaApp.TAG, CLASS_TAG + "openSocket with reflection: " + e.getMessage());
+			e.printStackTrace();
+		} catch (IllegalAccessException e) {
+			Log.e(TeclaApp.TAG, CLASS_TAG + "openSocket with reflection: " + e.getMessage());
+			e.printStackTrace();
+		} catch (InvocationTargetException e) {
+			Log.e(TeclaApp.TAG, CLASS_TAG + "openSocket with reflection: " + e.getMessage());
+			e.printStackTrace();
+		}
+		return connectSocket();
+	}
+	
 	private boolean connectSocket() {
 		try {
+			// See http://developer.android.com/reference/android/bluetooth/BluetoothSocket.html#connect%28%29
+			// for why the cancelDiscovery() call is necessary
+			mBluetoothAdapter.cancelDiscovery();
 			mBluetoothSocket.connect();
 			Log.d(TeclaApp.TAG, CLASS_TAG + "Connected to " + mBluetoothSocket.getRemoteDevice().getAddress());
 			return true;
