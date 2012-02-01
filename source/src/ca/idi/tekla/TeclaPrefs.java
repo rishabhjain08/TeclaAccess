@@ -24,12 +24,15 @@ import ca.idi.tekla.sep.SwitchEventProvider;
 import ca.idi.tekla.util.NavKbdTimeoutDialog;
 import ca.idi.tekla.util.Persistence;
 import ca.idi.tekla.util.ScanSpeedDialog;
+import ca.idi.tecla.lib.InputAccess;
 
+import android.app.AlertDialog;
 import android.app.ProgressDialog;
 import android.bluetooth.BluetoothAdapter;
 import android.bluetooth.BluetoothDevice;
 import android.content.BroadcastReceiver;
 import android.content.Context;
+import android.content.DialogInterface;
 import android.content.Intent;
 import android.content.IntentFilter;
 import android.content.SharedPreferences;
@@ -41,6 +44,8 @@ import android.preference.PreferenceGroup;
 import android.preference.PreferenceScreen;
 import android.text.AutoText;
 import android.util.Log;
+import android.view.Menu;
+import android.view.MenuInflater;
 
 public class TeclaPrefs extends PreferenceActivity
 implements SharedPreferences.OnSharedPreferenceChangeListener {
@@ -269,14 +274,32 @@ implements SharedPreferences.OnSharedPreferenceChangeListener {
 				// Show keyboard immediately
 				TeclaApp.getInstance().requestShowIMEView();
 			} else {
-				mPrefAutohideTimeout.setEnabled(false);
-				mPrefSelfScanning.setChecked(false);
-				mPrefSelfScanning.setEnabled(false);
-				mPrefInverseScanning.setChecked(false);
-				mPrefInverseScanning.setEnabled(false);
-				mPrefFullScreenSwitch.setChecked(false);
-				mPrefConnectToShield.setChecked(false);
-				TeclaApp.getInstance().requestHideIMEView();
+				//TODO: Show alert saying it will disconnect Shield
+				AlertDialog.Builder builder = new AlertDialog.Builder(this);
+				builder.setMessage("This will disconnect your Shield. Are you sure you want to proceed?")
+			       .setCancelable(false)
+			       .setPositiveButton("Yes", new DialogInterface.OnClickListener() {
+			           public void onClick(DialogInterface dialog, int id) {
+							mPrefAutohideTimeout.setEnabled(false);
+							mPrefSelfScanning.setChecked(false);
+							mPrefSelfScanning.setEnabled(false);
+							mPrefInverseScanning.setChecked(false);
+							mPrefInverseScanning.setEnabled(false);
+							mPrefFullScreenSwitch.setChecked(false);
+							mPrefConnectToShield.setChecked(false);
+							TeclaApp.getInstance().requestHideIMEView();
+			           }
+			       })
+			       .setNegativeButton("No", new DialogInterface.OnClickListener() {
+			           public void onClick(DialogInterface dialog, int id) {
+			                dialog.cancel();
+			                mPrefPersistentKeyboard.setChecked(true);
+			                //No procedure;
+			           }
+			       });
+				android.app.AlertDialog alert = builder.create();
+				alert.show();
+				InputAccess.fixDialog(alert);
 			}
 		}
 		if (key.equals(Persistence.PREF_AUTOHIDE_TIMEOUT)) {
@@ -370,4 +393,31 @@ implements SharedPreferences.OnSharedPreferenceChangeListener {
 			mProgressDialog.dismiss();
 	}
 
+	@Override
+	public boolean onCreateOptionsMenu(Menu menu) {
+	    MenuInflater inflater = getMenuInflater();
+	    inflater.inflate(R.menu.menu, menu);
+	    return true;
+	}
+
+	Boolean tempVar = false;
+	
+	@Override
+	public boolean onPrepareOptionsMenu(Menu menu) {
+		
+		if (tempVar) {
+			AlertDialog alert = InputAccess.menu2Dialog(menu, this);
+			alert.show();
+			InputAccess.fixDialog(alert);
+			tempVar = false;
+		} else {
+			tempVar = true;
+		}
+		//ViewFixer.fixDialog(alert);
+		//TODO: Read menu contents
+		//TODO: Build AlertDialog
+		//TODO: Never open menu
+		//TODO: Show alertdialog
+		return tempVar;
+	}
 }
