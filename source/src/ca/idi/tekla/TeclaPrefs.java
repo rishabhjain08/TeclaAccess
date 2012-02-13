@@ -299,7 +299,7 @@ implements SharedPreferences.OnSharedPreferenceChangeListener {
 			       });
 				android.app.AlertDialog alert = builder.create();
 				alert.show();
-				InputAccess.fixDialog(alert);
+				InputAccess.makeAccessible(alert);
 			}
 		}
 		if (key.equals(Persistence.PREF_AUTOHIDE_TIMEOUT)) {
@@ -408,7 +408,7 @@ implements SharedPreferences.OnSharedPreferenceChangeListener {
 		if (tempVar) {
 			AlertDialog alert = InputAccess.menu2Dialog(menu, this);
 			alert.show();
-			InputAccess.fixDialog(alert);
+			InputAccess.makeAccessible(alert);
 			tempVar = false;
 		} else {
 			tempVar = true;
