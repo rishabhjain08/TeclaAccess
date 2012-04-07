@@ -21,12 +21,10 @@ package ca.idi.tekla;
 import ca.idi.tecla.sdk.SepManager;
 import ca.idi.tekla.R;
 import ca.idi.tekla.sep.SwitchEventProvider;
-import ca.idi.tekla.util.MapSwitchAction;
 import ca.idi.tekla.util.NavKbdTimeoutDialog;
 import ca.idi.tekla.util.Persistence;
 import ca.idi.tekla.util.ScanSpeedDialog;
 
-import android.app.AlertDialog;
 import android.app.ProgressDialog;
 import android.bluetooth.BluetoothAdapter;
 import android.bluetooth.BluetoothDevice;
@@ -62,7 +60,6 @@ implements SharedPreferences.OnSharedPreferenceChangeListener {
 
 	private CheckBoxPreference mPrefPersistentKeyboard;
 	private Preference mPrefAutohideTimeout;
-	private Preference mPrefConfigureInput;
 	private CheckBoxPreference mPrefConnectToShield;
 	private CheckBoxPreference mPrefFullScreenSwitch;
 	private CheckBoxPreference mPrefSelfScanning;
@@ -94,7 +91,6 @@ implements SharedPreferences.OnSharedPreferenceChangeListener {
 		mPrefVariantsKey = (CheckBoxPreference) findPreference(Persistence.PREF_VARIANTS_KEY);
 		mPrefPersistentKeyboard = (CheckBoxPreference) findPreference(Persistence.PREF_PERSISTENT_KEYBOARD);
 		mPrefAutohideTimeout = (Preference) findPreference(Persistence.PREF_AUTOHIDE_TIMEOUT);
-		mPrefConfigureInput = (Preference) findPreference(Persistence.PREF_SWITCH_ACTIONS);
 		mAutohideTimeoutDialog = new NavKbdTimeoutDialog(this);
 		mAutohideTimeoutDialog.setContentView(R.layout.dialog_autohide_timeout);
 		mPrefConnectToShield = (CheckBoxPreference) findPreference(Persistence.PREF_CONNECT_TO_SHIELD);
@@ -169,6 +165,7 @@ implements SharedPreferences.OnSharedPreferenceChangeListener {
 	@Override
 	protected void onPause() {
 		super.onPause();
+		finish();
 	}
 
 	@Override
@@ -251,11 +248,6 @@ implements SharedPreferences.OnSharedPreferenceChangeListener {
 		}
 		if (preference.getKey().equals(Persistence.PREF_AUTOHIDE_TIMEOUT)) {
 			mAutohideTimeoutDialog.show();
-		}
-		if (preference.getKey().equals(Persistence.PREF_SWITCH_ACTIONS)) {
-			Intent intent = new Intent();
-			intent.setClass(getApplicationContext(), MapSwitchAction.class);
-			startActivity(intent);
 		}
 		return super.onPreferenceTreeClick(preferenceScreen, preference);
 	}

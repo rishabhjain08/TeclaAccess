@@ -335,6 +335,7 @@ public class SwitchEventProvider extends Service implements Runnable {
 			//Screen should be on
 			//Answering should also unlock
 			TeclaApp.getInstance().answerCall();
+			TeclaApp.getInstance().useSpeakerphone();
 			// Assume phone is not ringing any more
 			mPhoneRinging = false;
 		} else if (!TeclaApp.persistence.isScreenOn()) {
@@ -353,7 +354,7 @@ public class SwitchEventProvider extends Service implements Runnable {
 			mSwitchEventIntent.putExtra(SwitchEvent.EXTRA_SWITCH_CHANGES, switchChanges);
 			mSwitchEventIntent.putExtra(SwitchEvent.EXTRA_SWITCH_STATES, switchStates);
 			// Broadcast event
-			sendOrderedBroadcast(mSwitchEventIntent,null);
+			sendBroadcast(mSwitchEventIntent);
 		}
 	}
 
