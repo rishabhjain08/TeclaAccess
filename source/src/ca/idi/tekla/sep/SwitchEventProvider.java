@@ -113,7 +113,7 @@ public class SwitchEventProvider extends Service implements Runnable {
 	}
 
 	private void init() {
-		if (TeclaApp.DEBUG) android.os.Debug.waitForDebugger();
+		//if (TeclaApp.DEBUG) android.os.Debug.waitForDebugger();
 		if (TeclaApp.DEBUG) Log.d(TeclaApp.TAG, CLASS_TAG + "Creating SEP...");
 
 		mBluetoothAdapter = BluetoothAdapter.getDefaultAdapter();
@@ -253,7 +253,7 @@ public class SwitchEventProvider extends Service implements Runnable {
 						try {
 							inByte = mInStream.read();
 							if (TeclaApp.DEBUG) Log.v(TeclaApp.TAG, CLASS_TAG + "Byte received: " +
-									TeclaApp.getInstance().byte2Hex(inByte) + "at " + SystemClock.uptimeMillis());
+									TeclaApp.getInstance().byte2Hex(inByte) + " at " + SystemClock.uptimeMillis());
 							if (inByte != 0xffffffff) { // Work-around for Samsung Galaxy 
 								if (inByte == STATE_PING) {
 									mPingCounter--;
@@ -369,6 +369,7 @@ public class SwitchEventProvider extends Service implements Runnable {
 				Log.e(TeclaApp.TAG, CLASS_TAG + "killSocket: " + e.getMessage());
 				e.printStackTrace();
 			}
+			mBluetoothSocket = null;
 		}
 		if (TeclaApp.DEBUG) Log.d(TeclaApp.TAG, CLASS_TAG + "Socket killed");
 	}
@@ -406,9 +407,9 @@ public class SwitchEventProvider extends Service implements Runnable {
 			teclaShield = mBluetoothAdapter.getRemoteDevice(shieldAddress);
 
 			if (!success) {
+				killSocket();
 				// Try usual method
 				if (TeclaApp.DEBUG) Log.d(TeclaApp.TAG, CLASS_TAG + "Creating bluetooth serial socket...");
-				killSocket();
 				try {
 					mBluetoothSocket = teclaShield.createRfcommSocketToServiceRecord(SPP_UUID);
 				} catch (IOException e) {
