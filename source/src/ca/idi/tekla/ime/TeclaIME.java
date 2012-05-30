@@ -628,6 +628,18 @@ public class TeclaIME extends InputMethodService
 				if (TeclaApp.DEBUG) Log.d(TeclaApp.TAG, CLASS_TAG + "Received input string intent.");
 				typeInputString(input_string);
 			}
+			if (action.equals(TeclaApp.ACTION_SHOW_IME_MENU_BUTTON)){
+				TeclaApp.persistence.setMenuKeyEnabled(true);
+				if(mKeyboardSwitcher.isNavigation()){
+					mKeyboardSwitcher.setKeyboardMode(KeyboardSwitcher.MODE_NAV);
+				}
+			}
+			if (action.equals(TeclaApp.ACTION_HIDE_IME_MENU_BUTTON)){
+				TeclaApp.persistence.setMenuKeyEnabled(false);
+				if(mKeyboardSwitcher.isNavigation()){
+					mKeyboardSwitcher.setKeyboardMode(KeyboardSwitcher.MODE_NAV);
+				}
+			}
 		}
 	};
 	
@@ -738,6 +750,9 @@ public class TeclaIME extends InputMethodService
 			break;
 		case TeclaKeyboardView.KEYCODE_OPTIONS:
 			showOptionsMenu();
+			break;
+		case KeyEvent.KEYCODE_MENU:
+			this.sendDownUpKeyEvents(KeyEvent.KEYCODE_MENU);
 			break;
 		case TeclaKeyboardView.KEYCODE_SHIFT_LONGPRESS:
 			if (mCapsLock) {
@@ -1417,7 +1432,9 @@ public class TeclaIME extends InputMethodService
 		registerReceiver(mReceiver, new IntentFilter(Highlighter.ACTION_START_SCANNING));
 		registerReceiver(mReceiver, new IntentFilter(Highlighter.ACTION_STOP_SCANNING));
 		registerReceiver(mReceiver, new IntentFilter(TeclaApp.ACTION_INPUT_STRING));
-
+		registerReceiver(mReceiver, new IntentFilter(TeclaApp.ACTION_SHOW_IME_MENU_BUTTON));
+		registerReceiver(mReceiver, new IntentFilter(TeclaApp.ACTION_HIDE_IME_MENU_BUTTON));
+	 
 		 mLastFullKeyboardMode = KeyboardSwitcher.MODE_TEXT;
 		 mTeclaHandler = new Handler();
 		 mShieldConnected = false;

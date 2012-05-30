@@ -32,7 +32,7 @@ public class Persistence {
 	public static final int AUTOHIDE_NULL = -999;
 	public static final int NEVER_AUTOHIDE = -1;
 	
-	private boolean mScreenOn, mInverseScanningChanged, mVariantsShowing;
+	private boolean mScreenOn, mInverseScanningChanged, mVariantsShowing, mMenuKeyEnabled;
 	
 	private SharedPreferences shared_prefs;
 	private SharedPreferences.Editor prefs_editor;
@@ -81,6 +81,10 @@ public class Persistence {
 	
 	public void setVariantsShowing (boolean showing) {
 		mVariantsShowing = showing;
+	}
+
+	public void setMenuKeyEnabled(boolean enabled){
+		mMenuKeyEnabled = enabled;
 	}
 
 	public boolean isVariantsShowing () {
@@ -148,6 +152,10 @@ public class Persistence {
 		return mInverseScanningChanged;
 	}
 	
+	public boolean isMenuKeyEnabled(){
+		return mMenuKeyEnabled;
+	}
+
 	public boolean isScanningEnabled() {
 		return  isSelfScanningEnabled() || isInverseScanningEnabled();
 	}

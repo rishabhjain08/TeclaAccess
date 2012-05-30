@@ -49,6 +49,8 @@ public class TeclaApp extends Application {
 	public static final String ACTION_STOP_FS_SWITCH_MODE = "ca.idi.tekla.ime.action.STOP_FS_SWITCH_MODE";
 	public static final String ACTION_INPUT_STRING = "ca.idi.tekla.ime.action.INPUT_STRING";
 	public static final String EXTRA_INPUT_STRING = "ca.idi.tekla.sep.extra.INPUT_STRING";
+	public static final String ACTION_SHOW_IME_MENU_BUTTON = "ca.idi.tekla.ime.action.SHOW_IME_MENU_BUTTON";
+	public static final String ACTION_HIDE_IME_MENU_BUTTON = "ca.idi.tekla.ime.action.HIDE_IME_MENU_BUTTON";
 	private static final long BOOT_TIMEOUT = 60000;
 	private static final int WAKE_LOCK_TIMEOUT = 5000;
 	

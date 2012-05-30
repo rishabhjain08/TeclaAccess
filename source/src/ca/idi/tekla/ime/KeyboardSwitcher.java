@@ -45,6 +45,7 @@ public class KeyboardSwitcher {
     public static final int MODE_TEXT_COUNT = 2;
     
     public static final int KEYBOARDMODE_NORMAL = R.id.mode_normal;
+    public static final int KEYBOARDMODE_NORMAL_MENU = R.id.mode_normal_menu;
     public static final int KEYBOARDMODE_URL = R.id.mode_url;
     public static final int KEYBOARDMODE_EMAIL = R.id.mode_email;
     public static final int KEYBOARDMODE_IM = R.id.mode_im;
@@ -251,7 +252,10 @@ public class KeyboardSwitcher {
             	if (useVoiceInput) {
             		return new KeyboardId(R.xml.kbd_navigation, KEYBOARDMODE_VOICE, true);
             	}
-                return new KeyboardId(R.xml.kbd_navigation, KEYBOARDMODE_NORMAL, true);
+            	if(TeclaApp.persistence.isMenuKeyEnabled())
+            		return new KeyboardId(R.xml.kbd_navigation, KEYBOARDMODE_NORMAL_MENU, true);
+            	else
+            		return new KeyboardId(R.xml.kbd_navigation, KEYBOARDMODE_NORMAL, true);
             case MODE_1X3:
                 return new KeyboardId(R.xml.kbd_1x3, KEYBOARDMODE_NORMAL, true);
             case MODE_1X4:
